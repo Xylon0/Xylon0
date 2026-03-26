@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment left by a user on the website.",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The content of the comment."
+        },
+        "authorName": {
+          "type": "string",
+          "description": "The display name of the author."
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "The unique ID of the author."
+        },
+        "authorPhoto": {
+          "type": "string",
+          "description": "The URL of the author's profile photo."
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "The time the comment was created."
+        }
+      },
+      "required": ["text", "authorName", "authorUid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/comments/{commentId}": {
+      "schema": {
+        "$ref": "#/entities/Comment"
+      },
+      "description": "Stores all user comments."
+    }
+  }
+}

@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: comments
+    // Document ID: auto-generated
+    // Fields:
+    //   - text: string (required, max 1000 chars) - The content of the comment
+    //   - authorName: string (required, max 100 chars) - The display name of the author
+    //   - authorUid: string (required, immutable) - The unique ID of the author
+    //   - authorPhoto: string (optional, max 500 chars) - The URL of the author's profile photo
+    //   - createdAt: timestamp (required, immutable) - The time the comment was created
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.authorUid;
+    }
+
+    function uidUnchanged() {
+      return !('authorUid' in request.resource.data) ||
+        request.resource.data.authorUid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('authorUid' in request.resource.data) ||
+        request.resource.data.authorUid == resource.data.authorUid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidComment(data) {
+      return hasOnlyAllowedFields(['text', 'authorName', 'authorUid', 'authorPhoto', 'createdAt']) &&
+             hasRequiredFields(['text', 'authorName', 'authorUid', 'createdAt']) &&
+             validStringLength('text', 1, 1000) &&
+             validStringLength('authorName', 1, 100) &&
+             isValidOptionalString('authorPhoto', 0, 500) &&
+             data.authorUid is string &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /comments/{commentId} {
+      // Anyone can read comments
+      allow read: if true;
+      
+      // Only authenticated users can create comments, and they must be the author
+      allow create: if isAuthenticated() && 
+                    isValidComment(request.resource.data) && 
+                    uidUnchanged();
+                    
+      // Only the author can update their comment
+      allow update: if isAuthenticated() && 
+                    isDocOwner() &&
+                    isValidComment(request.resource.data) && 
+                    uidNotModified() &&
+                    request.resource.data.createdAt == resource.data.createdAt; // createdAt is immutable
+                    
+      // Only the author can delete their comment
+      allow delete: if isAuthenticated() && isDocOwner();
+    }
+  }
+}
