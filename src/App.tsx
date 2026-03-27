@@ -109,12 +109,33 @@ const HorizontalScroll = ({ children }: { children: React.ReactNode }) => {
     target: targetRef,
   });
 
-  const x = useTransform(scrollYProgress, [0, 1], ["0%", "-66.6%"]);
+  const x = useTransform(scrollYProgress, [0, 1], ["0%", "-75%"]);
+  const backgroundX = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
+  const progressWidth = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
 
   return (
-    <section ref={targetRef} className="relative h-[300vh] bg-transparent">
+    <section ref={targetRef} className="relative h-[400vh] bg-bg-dark overflow-hidden">
+      {/* 动态背景纹理 */}
+      <motion.div 
+        style={{ x: backgroundX }}
+        className="absolute inset-0 opacity-10 pointer-events-none"
+      >
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] scale-150" />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-purple-500/20" />
+      </motion.div>
+
       <div className="sticky top-0 flex h-screen items-center overflow-hidden">
-        <motion.div style={{ x }} className="flex gap-8 px-8">
+        {/* 进度指示器 */}
+        <div className="absolute bottom-12 left-[10vw] right-[10vw] h-px bg-white/10 z-20">
+          <motion.div 
+            style={{ width: progressWidth }}
+            className="h-full bg-primary shadow-[0_0_10px_rgba(52,58,150,0.8)]"
+          />
+          <div className="absolute -top-6 left-0 text-[10px] font-mono text-white/40 tracking-widest uppercase">Scroll Progress</div>
+          <div className="absolute -top-6 right-0 text-[10px] font-mono text-white/40 tracking-widest uppercase">01 / 04</div>
+        </div>
+
+        <motion.div style={{ x }} className="flex gap-12 px-[10vw]">
           {children}
         </motion.div>
       </div>
@@ -534,6 +555,10 @@ const TiltCard = ({ children, className = "", ...props }: { children: React.Reac
   const y = useMotionValue(0);
   const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [15, -15]), { stiffness: 150, damping: 15 });
   const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-15, 15]), { stiffness: 150, damping: 15 });
+  
+  // 鼠标跟随发光效果
+  const glowX = useSpring(useTransform(x, [-0.5, 0.5], [0, 100]), { stiffness: 150, damping: 15 });
+  const glowY = useSpring(useTransform(y, [-0.5, 0.5], [0, 100]), { stiffness: 150, damping: 15 });
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -555,12 +580,26 @@ const TiltCard = ({ children, className = "", ...props }: { children: React.Reac
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-      className={className}
+      className={`relative group ${className}`}
       {...props}
     >
-      <div style={{ transform: "translateZ(50px)", transformStyle: "preserve-3d" }} className="w-full h-full">
+      {/* 动态发光层 */}
+      <motion.div 
+        className="absolute inset-0 z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        style={{
+          background: useTransform(
+            [x, y],
+            ([lx, ly]) => `radial-gradient(circle at ${(lx as number + 0.5) * 100}% ${(ly as number + 0.5) * 100}%, rgba(52, 58, 150, 0.3) 0%, transparent 70%)`
+          )
+        }}
+      />
+
+      <div style={{ transform: "translateZ(50px)", transformStyle: "preserve-3d" }} className="w-full h-full relative z-10">
         {children}
       </div>
+      
+      {/* 边框发光 */}
+      <div className="absolute inset-0 border border-white/5 rounded-[inherit] group-hover:border-primary/30 transition-colors duration-500 pointer-events-none" />
     </motion.div>
   );
 };
@@ -690,6 +729,8 @@ export default function App() {
 
   // Hover state for interactive elements
   const [isHovering, setIsHovering] = useState(false);
+  const [isTextHovering, setIsTextHovering] = useState(false);
+  const [isClicked, setIsClicked] = useState(false);
   const hoverScale = useSpring(isHovering ? 2.5 : 1, { stiffness: 300, damping: 20 });
 
   // Initialize Lenis Smooth Scroll
@@ -717,20 +758,30 @@ export default function App() {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       globalMouseX.set(e.clientX);
       globalMouseY.set(e.clientY);
+      
+      const target = e.target as HTMLElement;
+      setIsTextHovering(!!target.closest("p, h1, h2, h3, h4, span, li, blockquote"));
     };
 
     const handleHoverStart = () => setIsHovering(true);
     const handleHoverEnd = () => setIsHovering(false);
+    const handleMouseDown = () => setIsClicked(true);
+    const handleMouseUp = () => setIsClicked(false);
 
-    const interactiveElements = document.querySelectorAll('a, button, [role="button"], input, textarea, .interactive');
+    const interactiveElements = document.querySelectorAll('a, button, [role="button"], input, textarea, .interactive, .cursor-pointer');
     interactiveElements.forEach(el => {
       el.addEventListener('mouseenter', handleHoverStart);
       el.addEventListener('mouseleave', handleHoverEnd);
     });
 
     window.addEventListener("mousemove", handleGlobalMouseMove);
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("mouseup", handleMouseUp);
+    
     return () => {
       window.removeEventListener("mousemove", handleGlobalMouseMove);
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("mouseup", handleMouseUp);
       interactiveElements.forEach(el => {
         el.removeEventListener('mouseenter', handleHoverStart);
         el.removeEventListener('mouseleave', handleHoverEnd);
@@ -932,6 +983,12 @@ export default function App() {
       {/* 2. Middle Ring (Responsive Lag) */}
       <motion.div
         className="fixed top-0 left-0 w-10 h-10 rounded-full border border-primary/20 pointer-events-none z-[100] hidden md:block"
+        animate={{
+          width: isTextHovering ? 2 : 40,
+          height: isTextHovering ? 40 : 40,
+          borderRadius: isTextHovering ? "2px" : "50%",
+          opacity: isTextHovering ? 0.8 : 1,
+        }}
         style={{
           x: ringX,
           y: ringY,
@@ -944,6 +1001,10 @@ export default function App() {
       {/* 3. Inner Dot (High Precision with Velocity Stretch) */}
       <motion.div
         className="fixed top-0 left-0 w-2 h-2 rounded-full bg-primary pointer-events-none z-[101] mix-blend-screen hidden md:block shadow-[0_0_20px_rgba(91,59,163,1)]"
+        animate={{
+          scale: isClicked ? 0.5 : (isTextHovering ? 0 : 1),
+          opacity: isTextHovering ? 0 : 1,
+        }}
         style={{
           x: cursorX,
           y: cursorY,
@@ -955,6 +1016,25 @@ export default function App() {
           skewY: cursorSkewY,
         }}
       />
+
+      {/* 4. Click Ripple Effect */}
+      <AnimatePresence>
+        {isClicked && (
+          <motion.div
+            initial={{ opacity: 0.5, scale: 0 }}
+            animate={{ opacity: 0, scale: 4 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="fixed top-0 left-0 w-8 h-8 rounded-full border border-primary pointer-events-none z-[100] hidden md:block"
+            style={{
+              x: cursorX,
+              y: cursorY,
+              translateX: "-50%",
+              translateY: "-50%",
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* 4. Liquid Trail Dots */}
       {[0.1, 0.2, 0.3].map((delay, i) => (
@@ -1487,64 +1567,121 @@ export default function App() {
       <SectionDivider />
 
       {/* 3. 品牌氛围 (Horizontal Scroll) */}
-      <section className="bg-bg-dark border-y border-white/5">
+      <section className="bg-bg-dark border-y border-white/5 relative overflow-hidden">
+        {/* 背景装饰文字 */}
+        <div className="absolute top-1/2 left-0 -translate-y-1/2 text-[20vw] font-black text-white/[0.02] pointer-events-none select-none whitespace-nowrap z-0">
+          XYLON BRAND MOODBOARD 2026
+        </div>
+
         <HorizontalScroll>
-          <div className="flex items-center gap-12 px-[10vw]">
-            <div className="flex-shrink-0 w-[400px]">
-              <Reveal>
-                <h2 className="text-6xl font-black text-white mb-6">
-                  <ScrambleText text="BRAND" /><br/>
-                  <span className="text-primary"><ScrambleText text="MOOD" /></span>
-                </h2>
-              </Reveal>
-              <p className="text-white/60 text-lg leading-relaxed">
+          <div className="flex items-center gap-24 px-[10vw]">
+            <div className="flex-shrink-0 w-[450px] relative z-10">
+              <div className="mb-12">
+                <span className="text-primary font-mono text-xs tracking-[0.5em] uppercase mb-4 block">Section_03</span>
+                <Reveal>
+                  <h2 className="text-7xl font-black text-white leading-tight">
+                    <ScrambleText text="BRAND" /><br/>
+                    <span className="text-primary italic"><ScrambleText text="MOOD" /></span>
+                  </h2>
+                </Reveal>
+              </div>
+              <p className="text-white/60 text-xl leading-relaxed font-light">
                 从深邃的民族底蕴中汲取能量，在现代极简的语境下重构视觉张力。
                 这是一场关于传承与创新的跨时空对话。
               </p>
+              <div className="mt-12 flex items-center gap-4">
+                <div className="w-12 h-px bg-primary" />
+                <span className="text-white/40 font-mono text-[10px] uppercase tracking-widest">Scroll to explore</span>
+              </div>
             </div>
             
             {[
-              { title: "MYSTIC", img: "https://i.postimg.cc/SsMbfGNf/image.png", color: "from-purple-500/20" },
-              { title: "ETHNIC", img: "https://i.postimg.cc/HsJsPbZN/image.png", color: "from-orange-500/20" },
-              { title: "MODERN", img: "https://i.postimg.cc/MZmF2LNk/13e48e35167ad06cc06b9621fe9691d5.jpg", color: "from-blue-500/20" },
-              { title: "FUTURE", img: "https://i.postimg.cc/SRx7pg2t/image.png", color: "from-primary/20" }
+              { title: "MYSTIC", img: "https://i.postimg.cc/SsMbfGNf/image.png", color: "from-purple-500/20", desc: "深邃而神秘的视觉语言" },
+              { title: "ETHNIC", img: "https://i.postimg.cc/HsJsPbZN/image.png", color: "from-orange-500/20", desc: "民族元素的现代重构" },
+              { title: "MODERN", img: "https://i.postimg.cc/MZmF2LNk/13e48e35167ad06cc06b9621fe9691d5.jpg", color: "from-blue-500/20", desc: "极简主义的极致表达" },
+              { title: "FUTURE", img: "https://i.postimg.cc/SRx7pg2t/image.png", color: "from-primary/20", desc: "面向未来的品牌张力" }
             ].map((item, i) => (
               <TiltCard 
                 key={i}
-                className="flex-shrink-0 w-[450px] aspect-[3/4] relative group rounded-3xl overflow-hidden bg-white/5 border border-white/10"
+                className="flex-shrink-0 w-[500px] aspect-[3/4] relative group rounded-[40px] overflow-hidden bg-white/5 border border-white/10"
               >
                 <img 
                   src={item.img} 
                   alt={item.title} 
-                  className="w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
+                  className="w-full h-full object-cover opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-1000 ease-out"
                   referrerPolicy="no-referrer"
                 />
+                
+                {/* 动态遮罩 */}
                 <motion.div 
                   className="absolute inset-0 bg-primary z-10 pointer-events-none"
                   initial={{ clipPath: "circle(0% at 50% 50%)" }}
                   whileHover={{ clipPath: "circle(150% at 50% 50%)" }}
-                  transition={{ duration: 0.8, ease: [0.19, 1, 0.22, 1] }}
-                  style={{ mixBlendMode: "overlay", opacity: 0.4 }}
+                  transition={{ duration: 1.2, ease: [0.19, 1, 0.22, 1] }}
+                  style={{ mixBlendMode: "overlay", opacity: 0.3 }}
                 />
-                <div className={`absolute inset-0 bg-gradient-to-t ${item.color} to-transparent opacity-60`} />
-                <div className="absolute bottom-8 left-8" style={{ transform: "translateZ(30px)" }}>
-                  <span className="text-xs font-mono text-primary mb-2 block tracking-[0.3em]">CONCEPT_0{i+1}</span>
-                  <h3 className="text-4xl font-black text-white tracking-tighter">{item.title}</h3>
+                
+                <div className={`absolute inset-0 bg-gradient-to-t ${item.color} via-transparent to-transparent opacity-60`} />
+                
+                {/* 内容层 */}
+                <div className="absolute inset-0 p-12 flex flex-col justify-end" style={{ transform: "translateZ(40px)" }}>
+                  <div className="overflow-hidden">
+                    <motion.span 
+                      initial={{ y: 20, opacity: 0 }}
+                      whileInView={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="text-xs font-mono text-primary mb-3 block tracking-[0.4em]"
+                    >
+                      CONCEPT_0{i+1}
+                    </motion.span>
+                  </div>
+                  <div className="overflow-hidden">
+                    <motion.h3 
+                      initial={{ y: 40, opacity: 0 }}
+                      whileInView={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.3 }}
+                      className="text-5xl font-black text-white tracking-tighter mb-4"
+                    >
+                      {item.title}
+                    </motion.h3>
+                  </div>
+                  <p className="text-white/40 text-sm font-light max-w-[200px] group-hover:text-white/80 transition-colors duration-500">
+                    {item.desc}
+                  </p>
                 </div>
                 
-                {/* Glass Overlay on Hover */}
-                <div className="absolute inset-0 bg-white/5 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center" style={{ transform: "translateZ(40px)" }}>
-                  <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-transform duration-500 delay-100">
-                    <ArrowRight size={24} />
-                  </div>
+                {/* 装饰性坐标 */}
+                <div className="absolute top-8 right-8 font-mono text-[10px] text-white/20">
+                  40.7128° N, 74.0060° W
+                </div>
+                
+                {/* 交互圆圈 */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-700 scale-50 group-hover:scale-100 backdrop-blur-md" style={{ transform: "translateZ(60px)" }}>
+                  <ArrowRight size={32} className="text-white" />
                 </div>
               </TiltCard>
             ))}
             
-            <div className="flex-shrink-0 w-[400px] flex flex-col justify-center">
-              <div className="h-px w-full bg-white/10 mb-8" />
-              <p className="text-white/40 font-mono text-sm uppercase tracking-widest mb-4">End of Moodboard</p>
-              <h3 className="text-3xl font-bold text-white/80">探索无限可能</h3>
+            <div className="flex-shrink-0 w-[500px] flex flex-col justify-center items-center text-center px-12">
+              <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center mb-12 group cursor-pointer hover:border-primary transition-colors duration-500">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                >
+                  <ArrowRight size={40} className="text-white/20 group-hover:text-primary transition-colors" />
+                </motion.div>
+              </div>
+              <h3 className="text-4xl font-black text-white mb-6 tracking-tighter">探索更多灵感</h3>
+              <p className="text-white/40 text-lg font-light leading-relaxed">
+                点击进入完整的品牌视觉系统，<br/>感受每一个像素背后的故事。
+              </p>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="mt-12 px-10 py-4 bg-white text-bg-dark font-black text-sm uppercase tracking-widest rounded-full hover:bg-primary hover:text-white transition-all duration-500"
+              >
+                View Full Gallery
+              </motion.button>
             </div>
           </div>
         </HorizontalScroll>
@@ -1642,46 +1779,95 @@ export default function App() {
                     </div>
 
                     {/* Preview Side */}
-                    <div className="aspect-square md:aspect-auto bg-black/40 flex items-center justify-center relative overflow-hidden">
+                    <div className="aspect-square md:aspect-auto bg-black/40 flex items-center justify-center relative overflow-hidden group/preview">
+                      {/* 背景网格 */}
+                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+                      
+                      {/* HUD 装饰元素 */}
+                      <div className="absolute top-4 left-4 flex flex-col gap-1 z-20">
+                        <div className="w-8 h-px bg-primary/40" />
+                        <div className="w-4 h-px bg-primary/40" />
+                        <span className="text-[8px] font-mono text-primary/60 tracking-widest uppercase mt-1">Vision_Scan_v3.1</span>
+                      </div>
+                      <div className="absolute bottom-4 right-4 text-right z-20">
+                        <span className="text-[8px] font-mono text-primary/60 tracking-widest uppercase block">LAT: 40.7128° N</span>
+                        <span className="text-[8px] font-mono text-primary/60 tracking-widest uppercase block">LNG: 74.0060° W</span>
+                        <div className="w-12 h-px bg-primary/40 mt-2 ml-auto" />
+                      </div>
+
                       {isGenerating ? (
-                        <div className="flex flex-col items-center">
-                          <div className="relative w-20 h-20 mb-6">
+                        <div className="flex flex-col items-center relative z-20">
+                          {/* 扫描线效果 */}
+                          <motion.div 
+                            animate={{ top: ["0%", "100%", "0%"] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            className="absolute left-0 right-0 h-px bg-primary shadow-[0_0_15px_rgba(52,58,150,1)] z-30"
+                          />
+                          
+                          <div className="relative w-24 h-24 mb-8">
                             <motion.div 
                               animate={{ rotate: 360 }}
-                              transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
-                              className="absolute inset-0 rounded-full border border-primary/30 border-t-primary"
+                              transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+                              className="absolute inset-0 rounded-full border-2 border-primary/20 border-t-primary shadow-[0_0_20px_rgba(52,58,150,0.2)]"
+                            />
+                            <motion.div 
+                              animate={{ rotate: -360 }}
+                              transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
+                              className="absolute inset-2 rounded-full border border-white/10 border-b-white/30"
                             />
                             <div className="absolute inset-0 flex items-center justify-center">
-                              <Sparkles className="text-primary/50" size={24} />
+                              <Sparkles className="text-primary animate-pulse" size={32} />
                             </div>
                           </div>
-                          <span className="text-[10px] font-mono text-primary tracking-[0.3em] uppercase animate-pulse">Processing</span>
+                          
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="text-[10px] font-mono text-primary tracking-[0.4em] uppercase animate-pulse">Neural_Processing</span>
+                            <div className="flex gap-1">
+                              {[0, 1, 2].map(i => (
+                                <motion.div 
+                                  key={i}
+                                  animate={{ opacity: [0, 1, 0] }}
+                                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                                  className="w-1 h-1 bg-primary rounded-full"
+                                />
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       ) : generatedImage ? (
-                        <motion.img 
-                          initial={{ opacity: 0, scale: 1.1, filter: "blur(20px)" }}
-                          animate={{ 
-                            opacity: 1, 
-                            scale: 1, 
-                            x: [0, -2, 2, 0],
-                            filter: ["blur(0px) hue-rotate(0deg)", "blur(0px) hue-rotate(90deg)", "blur(0px) hue-rotate(0deg)"]
-                          }}
-                          transition={{
-                            opacity: { duration: 0.5 },
-                            scale: { duration: 0.5 },
-                            filter: { duration: 0.5 },
-                            x: { duration: 0.2, repeat: 3 },
-                            hue: { duration: 0.2, repeat: 3 }
-                          }}
-                          src={generatedImage} 
-                          alt="AI Vision" 
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
+                        <div className="relative w-full h-full group/img">
+                          <motion.img 
+                            initial={{ opacity: 0, scale: 1.1, filter: "blur(20px)" }}
+                            animate={{ 
+                              opacity: 1, 
+                              scale: 1, 
+                              filter: "blur(0px)"
+                            }}
+                            transition={{ duration: 0.8, ease: "easeOut" }}
+                            src={generatedImage} 
+                            alt="AI Vision" 
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-105"
+                            referrerPolicy="no-referrer"
+                          />
+                          {/* 图片上的扫描线（静止或微动） */}
+                          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent opacity-30 pointer-events-none" />
+                          <div className="absolute inset-0 border-4 border-white/5 m-4 pointer-events-none" />
+                        </div>
                       ) : (
-                        <div className="flex flex-col items-center gap-4 text-white/10">
-                          <ImageIcon size={48} strokeWidth={1} />
-                          <span className="text-[10px] font-mono uppercase tracking-widest">Waiting for input</span>
+                        <div className="flex flex-col items-center gap-6 text-white/10 relative z-20">
+                          <div className="relative">
+                            <ImageIcon size={64} strokeWidth={0.5} />
+                            <motion.div 
+                              animate={{ opacity: [0.1, 0.3, 0.1] }}
+                              transition={{ duration: 4, repeat: Infinity }}
+                              className="absolute -inset-8 bg-primary/20 blur-3xl rounded-full"
+                            />
+                          </div>
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="text-[10px] font-mono uppercase tracking-[0.5em]">System_Idle</span>
+                            <span className="text-[8px] font-mono uppercase tracking-widest text-white/5">Waiting for neural prompt...</span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1777,48 +1963,84 @@ export default function App() {
               <div className="space-y-6">
                 <AnimatePresence mode="popLayout">
                   {comments.length > 0 ? (
-                    comments.map((comment, i) => (
-                      <motion.div
-                        key={comment.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ delay: i * 0.1 }}
-                        className="group relative"
-                      >
-                        <div className="flex gap-6 p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] transition-all duration-500">
-                          {comment.authorPhoto ? (
-                            <img src={comment.authorPhoto} alt={comment.authorName} className="w-10 h-10 rounded-full grayscale group-hover:grayscale-0 transition-all duration-500" referrerPolicy="no-referrer" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/20"><User size={20} /></div>
-                          )}
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-sm font-bold text-white/80">{comment.authorName}</h4>
-                              <span className="text-[10px] font-mono text-white/20">
-                                {comment.createdAt?.toDate().toLocaleDateString()}
-                              </span>
+                    <motion.div
+                      initial="hidden"
+                      animate="visible"
+                      variants={{
+                        visible: {
+                          transition: {
+                            staggerChildren: 0.1
+                          }
+                        }
+                      }}
+                      className="space-y-6"
+                    >
+                      {comments.map((comment, i) => (
+                        <motion.div
+                          key={comment.id}
+                          variants={{
+                            hidden: { opacity: 0, x: 20, filter: "blur(10px)" },
+                            visible: { opacity: 1, x: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 200, damping: 20 } }
+                          }}
+                          exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
+                          className="group relative"
+                        >
+                          <div className="flex gap-6 p-8 rounded-[32px] bg-white/[0.02] border border-white/5 hover:border-primary/20 hover:bg-white/[0.04] transition-all duration-700 relative overflow-hidden">
+                            {/* Hover Glow */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+                            
+                            <div className="relative z-10 flex gap-6 w-full">
+                              {comment.authorPhoto ? (
+                                <div className="relative flex-shrink-0">
+                                  <img src={comment.authorPhoto} alt={comment.authorName} className="w-12 h-12 rounded-full grayscale group-hover:grayscale-0 transition-all duration-700 border border-white/10 group-hover:border-primary/30" referrerPolicy="no-referrer" />
+                                  <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-bg-dark border border-white/10 flex items-center justify-center">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-white/20 border border-white/10 group-hover:border-primary/30 transition-all duration-700 flex-shrink-0"><User size={24} /></div>
+                              )}
+                              
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-3">
+                                    <h4 className="text-sm font-black text-white/90 tracking-tight">{comment.authorName}</h4>
+                                    <div className="w-1 h-1 rounded-full bg-white/10" />
+                                    <span className="text-[10px] font-mono text-white/20 uppercase tracking-widest">Verified_Voice</span>
+                                  </div>
+                                  <span className="text-[10px] font-mono text-white/20 bg-white/5 px-2 py-1 rounded-md">
+                                    {comment.createdAt?.toDate().toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-white/50 leading-relaxed group-hover:text-white/80 transition-colors duration-500 font-light">
+                                  {comment.text}
+                                </p>
+                              </div>
+                              
+                              {user?.uid === comment.authorUid && (
+                                <button 
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="opacity-0 group-hover:opacity-100 p-2 text-white/20 hover:text-red-500 transition-all self-start"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
-                            <p className="text-sm text-white/50 leading-relaxed group-hover:text-white/70 transition-colors">
-                              {comment.text}
-                            </p>
                           </div>
-                          
-                          {user?.uid === comment.authorUid && (
-                            <button 
-                              onClick={() => handleDeleteComment(comment.id)}
-                              className="opacity-0 group-hover:opacity-100 p-2 text-white/20 hover:text-red-500 transition-all"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </motion.div>
-                    ))
+                        </motion.div>
+                      ))}
+                    </motion.div>
                   ) : (
-                    <div className="py-20 text-center border border-dashed border-white/5 rounded-3xl">
-                      <p className="text-white/20 font-mono text-xs uppercase tracking-widest">No voices yet. Be the first.</p>
-                    </div>
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="py-32 text-center border border-dashed border-white/10 rounded-[40px] bg-white/[0.01] relative overflow-hidden group"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                      <MessageSquare size={48} className="mx-auto mb-6 text-white/5 group-hover:text-primary/20 transition-colors duration-700" strokeWidth={1} />
+                      <p className="text-white/20 font-mono text-xs uppercase tracking-[0.5em] mb-2">Silence_Detected</p>
+                      <p className="text-white/10 text-[10px] uppercase tracking-widest">Be the first to resonate with Xylon</p>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>
