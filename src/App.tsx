@@ -13,9 +13,10 @@ import {
   AnimatePresence, 
   useMotionValue,
   useVelocity,
-  useAnimationFrame
+  useAnimationFrame,
+  MotionValue
 } from "motion/react";
-import { LogIn, LogOut, Send, User, Copy, Sparkles, Loader2, Image as ImageIcon, ArrowRight, MessageSquare, Trash2 } from "lucide-react";
+import { AICreator } from './components/AICreator';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, Timestamp, deleteDoc, doc } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase";
@@ -109,33 +110,12 @@ const HorizontalScroll = ({ children }: { children: React.ReactNode }) => {
     target: targetRef,
   });
 
-  const x = useTransform(scrollYProgress, [0, 1], ["0%", "-75%"]);
-  const backgroundX = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
-  const progressWidth = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
+  const x = useTransform(scrollYProgress, [0, 1], ["0%", "-66.6%"]);
 
   return (
-    <section ref={targetRef} className="relative h-[400vh] bg-bg-dark overflow-hidden">
-      {/* 动态背景纹理 */}
-      <motion.div 
-        style={{ x: backgroundX }}
-        className="absolute inset-0 opacity-10 pointer-events-none"
-      >
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] scale-150" />
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-purple-500/20" />
-      </motion.div>
-
+    <section ref={targetRef} className="relative h-[300vh] bg-transparent">
       <div className="sticky top-0 flex h-screen items-center overflow-hidden">
-        {/* 进度指示器 */}
-        <div className="absolute bottom-12 left-[10vw] right-[10vw] h-px bg-white/10 z-20">
-          <motion.div 
-            style={{ width: progressWidth }}
-            className="h-full bg-primary shadow-[0_0_10px_rgba(52,58,150,0.8)]"
-          />
-          <div className="absolute -top-6 left-0 text-[10px] font-mono text-white/40 tracking-widest uppercase">Scroll Progress</div>
-          <div className="absolute -top-6 right-0 text-[10px] font-mono text-white/40 tracking-widest uppercase">01 / 04</div>
-        </div>
-
-        <motion.div style={{ x }} className="flex gap-12 px-[10vw]">
+        <motion.div style={{ x }} className="flex gap-8 px-8">
           {children}
         </motion.div>
       </div>
@@ -153,7 +133,7 @@ const Marquee = ({ text, speed = 20 }: { text: string; speed?: number }) => {
       >
         {[...Array(10)].map((_, i) => (
           <span key={i} className="text-2xl font-black uppercase tracking-widest text-white/40">
-            {text} <span className="text-primary ml-4">•</span>
+            {text}
           </span>
         ))}
       </motion.div>
@@ -161,31 +141,46 @@ const Marquee = ({ text, speed = 20 }: { text: string; speed?: number }) => {
   );
 };
 
-const MagneticText = ({ children, strength = 0.2, className = "" }: { children: React.ReactNode; strength?: number; className?: string }) => {
+const MagneticText = ({ children, strength = 0.5, className = "" }: { children: React.ReactNode; strength?: number; className?: string }) => {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 150, damping: 15, mass: 0.1 });
-  const springY = useSpring(y, { stiffness: 150, damping: 15, mass: 0.1 });
+  const rotateX = useMotionValue(0);
+  const rotateY = useMotionValue(0);
+  const springX = useSpring(x, { stiffness: 300, damping: 20, mass: 0.5 });
+  const springY = useSpring(y, { stiffness: 300, damping: 20, mass: 0.5 });
+  const springRotateX = useSpring(rotateX, { stiffness: 300, damping: 20, mass: 0.5 });
+  const springRotateY = useSpring(rotateY, { stiffness: 300, damping: 20, mass: 0.5 });
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const { clientX, clientY, currentTarget } = e;
     const { left, top, width, height } = currentTarget.getBoundingClientRect();
     const centerX = left + width / 2;
     const centerY = top + height / 2;
+    
     x.set((clientX - centerX) * strength);
     y.set((clientY - centerY) * strength);
+    rotateX.set((clientY - centerY) * (strength * 0.1));
+    rotateY.set((clientX - centerX) * (strength * -0.1));
   };
 
   const handleMouseLeave = () => {
     x.set(0);
     y.set(0);
+    rotateX.set(0);
+    rotateY.set(0);
   };
 
   return (
     <motion.div
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      style={{ x: springX, y: springY }}
+      style={{ 
+        x: springX, 
+        y: springY, 
+        rotateX: springRotateX, 
+        rotateY: springRotateY,
+        transformStyle: 'preserve-3d'
+      }}
       className={`inline-block ${className}`}
     >
       {children}
@@ -193,48 +188,6 @@ const MagneticText = ({ children, strength = 0.2, className = "" }: { children: 
   );
 };
 
-const VelocityMarquee = ({ text, baseSpeed = 20 }: { text: string; baseSpeed?: number }) => {
-  const { scrollY } = useScroll();
-  const scrollVelocity = useVelocity(scrollY);
-  const smoothVelocity = useSpring(scrollVelocity, {
-    stiffness: 400,
-    damping: 50
-  });
-  const velocityFactor = useTransform(smoothVelocity, [0, 1000], [1, 5], {
-    clamp: false
-  });
-
-  const x = useMotionValue(0);
-  const directionFactor = useRef<number>(1);
-
-  useAnimationFrame((t, delta) => {
-    let moveBy = directionFactor.current * baseSpeed * (delta / 1000);
-
-    if (velocityFactor.get() < 0) {
-      directionFactor.current = -1;
-    } else if (velocityFactor.get() > 0) {
-      directionFactor.current = 1;
-    }
-
-    moveBy += directionFactor.current * moveBy * velocityFactor.get();
-
-    x.set(x.get() + moveBy);
-  });
-
-  const xTransform = useTransform(x, (v) => `${(v % 100) - 100}%`);
-
-  return (
-    <div className="overflow-hidden whitespace-nowrap flex border-y border-white/10 py-4 bg-white/5 backdrop-blur-sm">
-      <motion.div style={{ x: xTransform }} className="flex gap-8 px-4">
-        {[...Array(10)].map((_, i) => (
-          <span key={i} className="text-2xl font-black uppercase tracking-widest text-white/40">
-            {text} <span className="text-primary ml-4">•</span>
-          </span>
-        ))}
-      </motion.div>
-    </div>
-  );
-};
 
 const PerspectiveSection = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
   const ref = useRef(null);
@@ -243,14 +196,16 @@ const PerspectiveSection = ({ children, className = "" }: { children: React.Reac
     offset: ["start end", "end start"]
   });
 
-  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [5, 0, -5]);
-  const opacity = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [0, 1, 1, 0]);
-  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.95, 1, 0.95]);
+  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [15, 0, -15]);
+  const opacity = useTransform(scrollYProgress, [0, 0.1, 0.9, 1], [0, 1, 1, 0]);
+  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [0.8, 1, 0.8]);
+  const y = useTransform(scrollYProgress, [0, 0.5, 1], [100, 0, -100]);
+  const blur = useTransform(scrollYProgress, [0, 0.2, 0.8, 1], [20, 0, 0, 20]);
 
   return (
     <motion.div
       ref={ref}
-      style={{ rotateX, opacity, scale, perspective: 1000 }}
+      style={{ rotateX, opacity, scale, y, filter: useTransform(blur, (b) => `blur(${b}px)`), perspective: 2000 }}
       className={`relative ${className}`}
     >
       {children}
@@ -259,55 +214,69 @@ const PerspectiveSection = ({ children, className = "" }: { children: React.Reac
 };
 
 const FloatingElements = ({ mouseX, mouseY }: { mouseX: any; mouseY: any }) => {
-  const x1 = useTransform(mouseX, [-1, 1], [-30, 30]);
-  const y1 = useTransform(mouseY, [-1, 1], [-30, 30]);
-  const x2 = useTransform(mouseX, [-1, 1], [40, -40]);
-  const y2 = useTransform(mouseY, [-1, 1], [40, -40]);
+  const x1 = useTransform(mouseX, [-1, 1], [-50, 50]);
+  const y1 = useTransform(mouseY, [-1, 1], [-50, 50]);
+  const x2 = useTransform(mouseX, [-1, 1], [80, -80]);
+  const y2 = useTransform(mouseY, [-1, 1], [80, -80]);
 
   return (
     <>
       <motion.div
         style={{ x: x1, y: y1 }}
         animate={{
-          y: [0, -20, 0],
-          rotate: [0, 5, 0],
+          y: [0, -40, 0],
+          rotate: [0, 10, 0],
+          scale: [1, 1.1, 1],
         }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-        className="floating-element top-20 left-[10%] text-6xl pointer-events-none"
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        className="floating-element top-20 left-[10%] text-8xl pointer-events-none blur-[1px]"
       >
         🔥
       </motion.div>
       <motion.div
         style={{ x: x2, y: y2 }}
         animate={{
-          y: [0, 20, 0],
-          rotate: [0, -5, 0],
+          y: [0, 40, 0],
+          rotate: [0, -10, 0],
+          scale: [1, 1.2, 1],
         }}
-        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-        className="floating-element bottom-40 right-[15%] text-7xl pointer-events-none"
+        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+        className="floating-element bottom-40 right-[15%] text-9xl pointer-events-none blur-[2px]"
       >
         ✨
       </motion.div>
       <motion.div
         style={{ 
-          x: useTransform(mouseX, [-1, 1], [-50, 50]),
-          y: useTransform(mouseY, [-1, 1], [-50, 50])
+          x: useTransform(mouseX, [-1, 1], [-100, 100]),
+          y: useTransform(mouseY, [-1, 1], [-100, 100])
         }}
         animate={{
-          scale: [1, 1.1, 1],
-          opacity: [0.1, 0.2, 0.1],
+          scale: [1, 1.5, 1],
+          opacity: [0.05, 0.15, 0.05],
         }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-        className="floating-element top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px] pointer-events-none"
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+        className="floating-element top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/30 rounded-full blur-[150px] pointer-events-none"
       />
     </>
   );
 };
 
-const DynamicBackground = ({ mouseX, mouseY }: { mouseX: any; mouseY: any }) => {
+const CustomCursor = ({ mouseX, mouseY, isHovering }: { mouseX: MotionValue<number>, mouseY: MotionValue<number>, isHovering: boolean }) => {
   return (
-    <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
-      {/* 动态鼠标跟随光晕 */}
+    <motion.div
+      className="custom-cursor"
+      style={{
+        x: mouseX,
+        y: mouseY,
+        scale: isHovering ? 2 : 1,
+      }}
+      transition={{ type: "spring", stiffness: 500, damping: 28 }}
+    />
+  );
+};
+const DynamicBackground = ({ mouseX, mouseY }: any) => {
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
       <motion.div 
         style={{ 
           x: mouseX, 
@@ -369,7 +338,7 @@ const DynamicBackground = ({ mouseX, mouseY }: { mouseX: any; mouseY: any }) => 
       <div 
         className="absolute inset-0 opacity-[0.03]" 
         style={{ 
-          backgroundImage: `radial-gradient(circle, white 1px, transparent 1px)`,
+          backgroundImage: `none`,
           backgroundSize: '40px 40px'
         }} 
       />
@@ -415,13 +384,13 @@ const BackgroundParticles = ({ mouseX, mouseY }: any) => {
 
 const SectionDivider = () => (
   <div className="relative h-32 w-full overflow-hidden pointer-events-none">
-    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent blur-3xl opacity-30" />
+    <div className="absolute inset-0 bg-primary/5 blur-3xl opacity-30" />
     <motion.div 
       initial={{ scaleX: 0 }}
       whileInView={{ scaleX: 1 }}
       viewport={{ once: true }}
       transition={{ duration: 1.5, ease: "circOut" }}
-      className="absolute top-1/2 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"
+      className="absolute top-1/2 left-0 right-0 h-[1px] bg-primary/5"
     />
   </div>
 );
@@ -555,10 +524,6 @@ const TiltCard = ({ children, className = "", ...props }: { children: React.Reac
   const y = useMotionValue(0);
   const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [15, -15]), { stiffness: 150, damping: 15 });
   const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-15, 15]), { stiffness: 150, damping: 15 });
-  
-  // 鼠标跟随发光效果
-  const glowX = useSpring(useTransform(x, [-0.5, 0.5], [0, 100]), { stiffness: 150, damping: 15 });
-  const glowY = useSpring(useTransform(y, [-0.5, 0.5], [0, 100]), { stiffness: 150, damping: 15 });
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -580,26 +545,12 @@ const TiltCard = ({ children, className = "", ...props }: { children: React.Reac
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-      className={`relative group ${className}`}
+      className={className}
       {...props}
     >
-      {/* 动态发光层 */}
-      <motion.div 
-        className="absolute inset-0 z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-        style={{
-          background: useTransform(
-            [x, y],
-            ([lx, ly]) => `radial-gradient(circle at ${(lx as number + 0.5) * 100}% ${(ly as number + 0.5) * 100}%, rgba(52, 58, 150, 0.3) 0%, transparent 70%)`
-          )
-        }}
-      />
-
-      <div style={{ transform: "translateZ(50px)", transformStyle: "preserve-3d" }} className="w-full h-full relative z-10">
+      <div style={{ transform: "translateZ(50px)", transformStyle: "preserve-3d" }} className="w-full h-full">
         {children}
       </div>
-      
-      {/* 边框发光 */}
-      <div className="absolute inset-0 border border-white/5 rounded-[inherit] group-hover:border-primary/30 transition-colors duration-500 pointer-events-none" />
     </motion.div>
   );
 };
@@ -729,8 +680,6 @@ export default function App() {
 
   // Hover state for interactive elements
   const [isHovering, setIsHovering] = useState(false);
-  const [isTextHovering, setIsTextHovering] = useState(false);
-  const [isClicked, setIsClicked] = useState(false);
   const hoverScale = useSpring(isHovering ? 2.5 : 1, { stiffness: 300, damping: 20 });
 
   // Initialize Lenis Smooth Scroll
@@ -758,30 +707,20 @@ export default function App() {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       globalMouseX.set(e.clientX);
       globalMouseY.set(e.clientY);
-      
-      const target = e.target as HTMLElement;
-      setIsTextHovering(!!target.closest("p, h1, h2, h3, h4, span, li, blockquote"));
     };
 
     const handleHoverStart = () => setIsHovering(true);
     const handleHoverEnd = () => setIsHovering(false);
-    const handleMouseDown = () => setIsClicked(true);
-    const handleMouseUp = () => setIsClicked(false);
 
-    const interactiveElements = document.querySelectorAll('a, button, [role="button"], input, textarea, .interactive, .cursor-pointer');
+    const interactiveElements = document.querySelectorAll('a, button, [role="button"], input, textarea, .interactive');
     interactiveElements.forEach(el => {
       el.addEventListener('mouseenter', handleHoverStart);
       el.addEventListener('mouseleave', handleHoverEnd);
     });
 
     window.addEventListener("mousemove", handleGlobalMouseMove);
-    window.addEventListener("mousedown", handleMouseDown);
-    window.addEventListener("mouseup", handleMouseUp);
-    
     return () => {
       window.removeEventListener("mousemove", handleGlobalMouseMove);
-      window.removeEventListener("mousedown", handleMouseDown);
-      window.removeEventListener("mouseup", handleMouseUp);
       interactiveElements.forEach(el => {
         el.removeEventListener('mouseenter', handleHoverStart);
         el.removeEventListener('mouseleave', handleHoverEnd);
@@ -820,11 +759,6 @@ export default function App() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // AI Creator State
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
 
   // Handle Auth
   useEffect(() => {
@@ -908,62 +842,6 @@ export default function App() {
     toast.success(`已复制颜色代码 ${color}`);
   };
 
-  const handleGenerateImage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!aiPrompt.trim()) return;
-
-    try {
-      setIsGenerating(true);
-      
-      // Check API key
-      // @ts-ignore
-      const hasKey = await window.aistudio?.hasSelectedApiKey();
-      if (!hasKey) {
-        // @ts-ignore
-        await window.aistudio?.openSelectKey();
-      }
-
-      // Initialize GenAI
-      // @ts-ignore
-      const apiKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : import.meta.env.VITE_GEMINI_API_KEY;
-      const ai = new GoogleGenAI({ apiKey });
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-image-preview',
-        contents: {
-          parts: [{ text: `A high quality, professional brand mockup, poster, or merchandise for a brand named "XYLON". Style: Modern, ethnic, vibrant, minimalist. Incorporating elements of: ${aiPrompt}` }]
-        },
-        config: {
-          // @ts-ignore
-          imageConfig: {
-            aspectRatio: "1:1",
-            imageSize: "1K"
-          }
-        }
-      });
-
-      let imageUrl = null;
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-          break;
-        }
-      }
-
-      if (imageUrl) {
-        setGeneratedImage(imageUrl);
-        toast.success("AI 灵感生成成功！");
-      } else {
-        throw new Error("No image generated");
-      }
-    } catch (error) {
-      console.error("Image generation failed:", error);
-      toast.error("生成失败，请重试或检查 API Key 设置。");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
     <div ref={containerRef} className="bg-bg-dark cursor-auto md:cursor-none">
       {/* Custom Cursor Layers */}
@@ -983,12 +861,6 @@ export default function App() {
       {/* 2. Middle Ring (Responsive Lag) */}
       <motion.div
         className="fixed top-0 left-0 w-10 h-10 rounded-full border border-primary/20 pointer-events-none z-[100] hidden md:block"
-        animate={{
-          width: isTextHovering ? 2 : 40,
-          height: isTextHovering ? 40 : 40,
-          borderRadius: isTextHovering ? "2px" : "50%",
-          opacity: isTextHovering ? 0.8 : 1,
-        }}
         style={{
           x: ringX,
           y: ringY,
@@ -1001,10 +873,6 @@ export default function App() {
       {/* 3. Inner Dot (High Precision with Velocity Stretch) */}
       <motion.div
         className="fixed top-0 left-0 w-2 h-2 rounded-full bg-primary pointer-events-none z-[101] mix-blend-screen hidden md:block shadow-[0_0_20px_rgba(91,59,163,1)]"
-        animate={{
-          scale: isClicked ? 0.5 : (isTextHovering ? 0 : 1),
-          opacity: isTextHovering ? 0 : 1,
-        }}
         style={{
           x: cursorX,
           y: cursorY,
@@ -1016,25 +884,6 @@ export default function App() {
           skewY: cursorSkewY,
         }}
       />
-
-      {/* 4. Click Ripple Effect */}
-      <AnimatePresence>
-        {isClicked && (
-          <motion.div
-            initial={{ opacity: 0.5, scale: 0 }}
-            animate={{ opacity: 0, scale: 4 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="fixed top-0 left-0 w-8 h-8 rounded-full border border-primary pointer-events-none z-[100] hidden md:block"
-            style={{
-              x: cursorX,
-              y: cursorY,
-              translateX: "-50%",
-              translateY: "-50%",
-            }}
-          />
-        )}
-      </AnimatePresence>
 
       {/* 4. Liquid Trail Dots */}
       {[0.1, 0.2, 0.3].map((delay, i) => (
@@ -1065,6 +914,7 @@ export default function App() {
 
       <Toaster theme="dark" position="bottom-right" />
       <DynamicBackground mouseX={trailX} mouseY={trailY} />
+      <CustomCursor mouseX={cursorX} mouseY={cursorY} isHovering={isHovering} />
       
       {/* 顶部滚动进度条 */}
       <motion.div
@@ -1077,11 +927,11 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="relative group px-4 py-2 cursor-pointer">
             {/* Static Border (visible when not hovering) */}
-            <div className="absolute inset-0 rounded-lg border border-white/10 group-hover:border-transparent transition-colors duration-500" />
+            <div className="absolute inset-0 rounded-[12px] border border-white/10 group-hover:border-transparent transition-colors duration-500" />
             
             {/* Animated Light Beam (visible on hover) */}
-            <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden pointer-events-none">
-              <div className="absolute inset-[-150%] bg-[conic-gradient(from_0deg,transparent_80%,#343a96_100%)] animate-[spin_4s_linear_infinite]" />
+            <div className="absolute inset-0 rounded-[12px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden pointer-events-none">
+              <div className="absolute inset-[-150%] bg-primary/10 animate-[spin_4s_linear_infinite]" />
               {/* Inner Mask to create the border effect */}
               <div className="absolute inset-[1px] bg-bg-dark rounded-[7px] z-[1]" />
             </div>
@@ -1099,6 +949,9 @@ export default function App() {
               <a href="#brand-details" onClick={(e) => { e.preventDefault(); document.getElementById('brand-details')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">品牌解析</a>
             </Magnetic>
             <Magnetic strength={0.3}>
+              <a href="#brand-mood" onClick={(e) => { e.preventDefault(); document.getElementById('brand-mood')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">Brand Mood</a>
+            </Magnetic>
+            <Magnetic strength={0.3}>
               <a href="#showcase" onClick={(e) => { e.preventDefault(); document.getElementById('showcase')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">展示</a>
             </Magnetic>
             <Magnetic strength={0.3}>
@@ -1113,15 +966,15 @@ export default function App() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   {user.photoURL ? (
-                    <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" />
+                    <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full" referrerPolicy="no-referrer" loading="lazy" />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center"><User size={16} /></div>
+                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">👤</div>
                   )}
                   <span className="text-sm font-bold hidden sm:block">{user.displayName}</span>
                 </div>
                 <Magnetic strength={0.2}>
                   <button onClick={handleLogout} className="text-white/70 hover:text-white transition-colors" title="退出登录">
-                    <LogOut size={20} />
+                    🚪
                   </button>
                 </Magnetic>
               </div>
@@ -1130,13 +983,15 @@ export default function App() {
                 onClick={handleLogin}
                 className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-bold rounded-full hover:bg-primary/80 transition-colors"
               >
-                <LogIn size={16} />
+                🚪
                 <span>登录互动</span>
               </MagneticButton>
             )}
           </div>
         </div>
       </header>
+
+      <Marquee text="BRAND MOOD • DESIGN PHILOSOPHY • CREATIVE DIRECTION • XYLON" speed={30} />
 
       <BackgroundParticles mouseX={mouseX} mouseY={mouseY} />
 
@@ -1181,7 +1036,7 @@ export default function App() {
                 z: -60,
               }}
             >
-              <div className="w-[80%] h-[60%] bg-gradient-to-r from-primary/30 to-white/20 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+              <div className="w-[80%] h-[60%] bg-primary/5 blur-[100px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
             </motion.div>
 
             {/* 持续悬浮的 Logo 层 */}
@@ -1213,13 +1068,10 @@ export default function App() {
           >
             <source src="https://mp3tourl.com/videos/1774440026534-766d25e9-3705-4eac-ba03-bf5e8d3f395a.mp4" type="video/mp4" />
           </video>
-          <div className="absolute inset-0 bg-gradient-to-b from-bg-dark/70 via-transparent to-bg-dark" />
+          <div className="absolute inset-0 bg-primary/5" />
           <div className="absolute inset-0 bg-primary/10 mix-blend-overlay" />
         </motion.div>
       </section>
-
-      {/* Marquee */}
-      <VelocityMarquee text="XYLON BRANDING PROPOSAL • ETHNIC & MODERN • VISUAL IDENTITY • 2026" baseSpeed={30} />
 
       {/* 2. 品牌解析 (Tabbed Section) */}
       <PerspectiveSection>
@@ -1229,7 +1081,7 @@ export default function App() {
           <div className="relative w-full mb-16 flex flex-col md:block">
             {/* Tabs in Upper Right Corner (Desktop) / Top (Mobile) */}
             <motion.div 
-              className="flex flex-row flex-wrap gap-3 z-20 mb-8 md:mb-0 md:absolute md:top-0 md:right-0"
+              className="flex flex-row flex-wrap gap-4 z-20 mb-8 md:mb-0 md:absolute md:top-0 md:right-0"
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true, margin: "-100px" }}
@@ -1257,14 +1109,14 @@ export default function App() {
                   }}
                   whileHover="hover"
                   whileTap="tap"
-                  className={`relative px-6 py-4 border rounded-xl backdrop-blur-md transition-colors duration-300 flex items-center justify-center gap-2 flex-1 md:flex-none md:min-w-[140px] group overflow-hidden ${
+                  className={`relative px-6 py-4 border rounded-[12px] backdrop-blur-md transition-colors duration-300 flex items-center justify-center gap-2 flex-1 md:flex-none md:min-w-[140px] group overflow-hidden ${
                     activeTab === tab.id 
                       ? 'border-primary bg-primary/20 text-white shadow-[0_0_20px_rgba(52,58,150,0.4)]' 
                       : 'border-white/10 bg-black/40 text-white/50 hover:border-white/30 hover:text-white hover:bg-white/5 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]'
                   }`}
                 >
                   {/* Hover background effect */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                  <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                   
                   <span className="text-sm font-bold tracking-widest relative z-10 flex items-center gap-2">
                     <motion.span 
@@ -1294,7 +1146,7 @@ export default function App() {
                   {activeTab === tab.id && (
                     <motion.div
                       layoutId="activeBoxIndicator"
-                      className="absolute inset-0 border-2 border-primary rounded-xl pointer-events-none"
+                      className="absolute inset-0 border-2 border-primary rounded-[12px] pointer-events-none"
                       transition={{ type: "spring", stiffness: 300, damping: 30 }}
                     />
                   )}
@@ -1305,7 +1157,7 @@ export default function App() {
             {/* Header */}
             <div className="md:pt-4">
               <Reveal className="text-4xl md:text-5xl font-black uppercase mb-4">
-                {activeTab === 'elements' ? '要素提炼' : activeTab === 'colors' ? '颜色释义' : '设计理念'}
+                <ScrambleText text={activeTab === 'elements' ? '要素提炼' : activeTab === 'colors' ? '颜色释义' : '设计理念'} />
               </Reveal>
               <motion.div 
                 initial={{ width: 0 }}
@@ -1340,20 +1192,20 @@ export default function App() {
                       <motion.div 
                         key={i} 
                         whileHover={{ y: -10 }}
-                        className="group relative bg-white/5 border border-white/10 rounded-2xl p-8 hover:bg-white/10 transition-all duration-500 overflow-hidden cursor-pointer flex flex-col items-center text-center"
+                        className="group relative bg-white/5 border border-white/10 rounded-[12px] p-8 hover:bg-white/10 transition-all duration-500 overflow-hidden cursor-pointer flex flex-col items-center text-center"
                         style={{ perspective: 1000 }}
                       >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/40 transition-colors duration-500" />
                         
                         <motion.div 
-                          className="relative w-full aspect-square mb-6 flex items-center justify-center rounded-xl overflow-hidden"
+                          className="relative w-full aspect-square mb-6 flex items-center justify-center rounded-[12px] overflow-hidden"
                           whileHover={{ rotateX: 10, rotateY: -10, scale: 1.05 }}
                           transition={{ type: "spring", stiffness: 300, damping: 20 }}
                         >
-                          <img src={item.src} alt={item.alt} className="w-3/4 h-auto object-contain relative z-10 transition-transform duration-700 ease-out group-hover:scale-110 group-hover:-translate-y-2 group-hover:rotate-3 drop-shadow-2xl" referrerPolicy="no-referrer" />
+                          <img src={item.src} alt={item.alt} className="w-3/4 h-auto object-contain relative z-10 transition-transform duration-700 ease-out group-hover:scale-110 group-hover:-translate-y-2 group-hover:rotate-3 drop-shadow-2xl" referrerPolicy="no-referrer" loading="lazy" />
                           
                           {/* Hover Description Overlay */}
-                          <div className="absolute inset-0 bg-black/60 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20 flex items-center justify-center p-6 rounded-xl">
+                          <div className="absolute inset-0 bg-black/60 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20 flex items-center justify-center p-6 rounded-[12px]">
                             <p className="text-white text-sm leading-relaxed font-medium transform scale-90 group-hover:scale-100 transition-transform duration-500">
                               {item.desc}
                             </p>
@@ -1385,15 +1237,15 @@ export default function App() {
                       { name: "活力橙", color: "#E69C4A", cmyk: ["c:4", "m:44", "y:69", "k:0"], img: "https://i.postimg.cc/DZkcfxFy/2421699721927.png", darkText: false },
                       { name: "象牙白", color: "#F2E6D4", cmyk: ["c:4", "m:18", "y:27", "k:0"], img: "https://i.postimg.cc/tTqYz6NB/2441699721928.png", darkText: true }
                     ].map((item, i) => (
-                      <div key={i} className="flex flex-col group cursor-pointer relative overflow-hidden rounded-2xl shadow-lg hover:shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:-translate-y-2 hover:scale-[1.03] transition-all duration-500 bg-white/5 border border-white/10" onClick={() => handleCopyColor(item.color)}>
+                      <div key={i} className="flex flex-col group cursor-pointer relative overflow-hidden rounded-[12px] shadow-lg hover:shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:-translate-y-2 hover:scale-[1.03] transition-all duration-500 bg-white/5 border border-white/10" onClick={() => handleCopyColor(item.color)}>
                         <div className="aspect-square overflow-hidden relative">
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 flex items-center justify-center backdrop-blur-sm">
                             <div className="flex flex-col items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
-                              <Copy className="text-white drop-shadow-lg" size={32} />
+                              <span className="text-3xl">📋</span>
                               <span className="text-white font-bold text-sm tracking-wider drop-shadow-md">复制色值</span>
                             </div>
                           </div>
-                          <img src={item.img} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
+                          <img src={item.img} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" loading="lazy" />
                         </div>
                         <div className="p-8 flex flex-col justify-center min-h-[180px] relative" style={{ backgroundColor: item.color }}>
                           <div className={`space-y-1 ${item.darkText ? 'text-black/80' : 'text-white'}`}>
@@ -1420,12 +1272,12 @@ export default function App() {
                 >
                   <div className="flex flex-col lg:flex-row gap-6 min-h-[500px]">
                     {/* Left: Visual Display */}
-                    <div className="lg:w-1/2 relative rounded-3xl bg-gradient-to-br from-white/5 to-transparent border border-white/10 p-8 flex items-center justify-center overflow-hidden group">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(52,58,150,0.15)_0%,transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                    <div className="lg:w-1/2 relative rounded-[12px] bg-primary/5 border border-white/10 p-8 flex items-center justify-center overflow-hidden group">
+                      <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                       
                       {/* Decorative corner elements */}
-                      <div className="absolute top-8 left-8 w-16 h-16 border-t border-l border-primary/40 rounded-tl-2xl opacity-0 group-hover:opacity-100 transition-all duration-700 -translate-x-4 -translate-y-4 group-hover:translate-x-0 group-hover:translate-y-0" />
-                      <div className="absolute bottom-8 right-8 w-16 h-16 border-b border-r border-primary/40 rounded-br-2xl opacity-0 group-hover:opacity-100 transition-all duration-700 translate-x-4 translate-y-4 group-hover:translate-x-0 group-hover:translate-y-0" />
+                      <div className="absolute top-8 left-8 w-16 h-16 border-t border-l border-primary/40 rounded-tl-[12px] opacity-0 group-hover:opacity-100 transition-all duration-700 -translate-x-4 -translate-y-4 group-hover:translate-x-0 group-hover:translate-y-0" />
+                      <div className="absolute bottom-8 right-8 w-16 h-16 border-b border-r border-primary/40 rounded-br-[12px] opacity-0 group-hover:opacity-100 transition-all duration-700 translate-x-4 translate-y-4 group-hover:translate-x-0 group-hover:translate-y-0" />
 
                       {/* Floating badges */}
                       <div className="absolute top-12 right-12 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-xs font-mono text-primary opacity-0 group-hover:opacity-100 transition-all duration-500 delay-100 translate-y-4 group-hover:translate-y-0 z-20">
@@ -1467,14 +1319,14 @@ export default function App() {
                       ].map((item, i) => (
                         <div 
                           key={i}
-                          className="group relative flex-1 rounded-3xl bg-white/5 border border-white/10 p-6 overflow-hidden cursor-pointer transition-all duration-500 hover:bg-white/10 hover:flex-[1.5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.2)] hover:border-primary/30 flex flex-col justify-center"
+                          className="group relative flex-1 rounded-[12px] bg-white/5 border border-white/10 p-6 overflow-hidden cursor-pointer transition-all duration-500 hover:bg-white/10 hover:flex-[1.5] hover:shadow-[0_8px_30px_rgba(0,0,0,0.2)] hover:border-primary/30 flex flex-col justify-center"
                         >
                           {/* Hover Gradient */}
-                          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                          <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
                           
                           <div className="relative z-10">
                             <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-2xl bg-black/30 border border-white/5 flex items-center justify-center text-2xl grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110 group-hover:rotate-12 group-hover:border-primary/30 group-hover:bg-primary/20">
+                              <div className="w-12 h-12 rounded-[12px] bg-black/30 border border-white/5 flex items-center justify-center text-2xl grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110 group-hover:rotate-12 group-hover:border-primary/30 group-hover:bg-primary/20">
                                 {item.icon}
                               </div>
                               <div>
@@ -1509,6 +1361,26 @@ export default function App() {
 
       <SectionDivider />
 
+      <Section id="brand-mood" className="min-h-screen pt-24">
+        <div className="max-w-6xl w-full mx-auto px-4">
+          <Reveal className="text-4xl md:text-5xl font-black uppercase mb-12">
+            <ScrambleText text="BRAND MOOD" />
+          </Reveal>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-white/5 p-8 rounded-2xl border border-white/10">
+              <h3 className="text-2xl font-bold mb-4">Vibe 1</h3>
+              <p className="text-white/60">Description of vibe 1.</p>
+            </div>
+            <div className="bg-white/5 p-8 rounded-2xl border border-white/10">
+              <h3 className="text-2xl font-bold mb-4">Vibe 2</h3>
+              <p className="text-white/60">Description of vibe 2.</p>
+            </div>
+          </div>
+        </div>
+      </Section>
+
+      <SectionDivider />
+
       {/* 6. LOGO 展示 */}
       <Section id="showcase" className="relative overflow-hidden">
         <div className="max-w-6xl w-full mx-auto z-10 px-4 flex flex-col items-center">
@@ -1537,7 +1409,7 @@ export default function App() {
           />
           
           {/* 中层：光影效果 */}
-          <div className="absolute inset-0 bg-gradient-to-b from-bg-dark via-transparent to-bg-dark opacity-80" />
+          <div className="absolute inset-0 bg-primary/5 opacity-80" />
           
           {/* 顶层：细节纹理，使用 ParallaxImage 实现反向视差 */}
           <div className="absolute inset-0 opacity-10 mix-blend-overlay overflow-hidden">
@@ -1567,121 +1439,64 @@ export default function App() {
       <SectionDivider />
 
       {/* 3. 品牌氛围 (Horizontal Scroll) */}
-      <section className="bg-bg-dark border-y border-white/5 relative overflow-hidden">
-        {/* 背景装饰文字 */}
-        <div className="absolute top-1/2 left-0 -translate-y-1/2 text-[20vw] font-black text-white/[0.02] pointer-events-none select-none whitespace-nowrap z-0">
-          XYLON BRAND MOODBOARD 2026
-        </div>
-
+      <section className="bg-bg-dark border-y border-white/5">
         <HorizontalScroll>
-          <div className="flex items-center gap-24 px-[10vw]">
-            <div className="flex-shrink-0 w-[450px] relative z-10">
-              <div className="mb-12">
-                <span className="text-primary font-mono text-xs tracking-[0.5em] uppercase mb-4 block">Section_03</span>
-                <Reveal>
-                  <h2 className="text-7xl font-black text-white leading-tight">
-                    <ScrambleText text="BRAND" /><br/>
-                    <span className="text-primary italic"><ScrambleText text="MOOD" /></span>
-                  </h2>
-                </Reveal>
-              </div>
-              <p className="text-white/60 text-xl leading-relaxed font-light">
+          <div className="flex items-center gap-12 px-[10vw]">
+            <div className="flex-shrink-0 w-[400px]">
+              <Reveal>
+                <h2 className="text-6xl font-black text-white mb-6">
+                  <ScrambleText text="BRAND" /><br/>
+                  <span className="text-primary"><ScrambleText text="MOOD" /></span>
+                </h2>
+              </Reveal>
+              <p className="text-white/60 text-lg leading-relaxed">
                 从深邃的民族底蕴中汲取能量，在现代极简的语境下重构视觉张力。
                 这是一场关于传承与创新的跨时空对话。
               </p>
-              <div className="mt-12 flex items-center gap-4">
-                <div className="w-12 h-px bg-primary" />
-                <span className="text-white/40 font-mono text-[10px] uppercase tracking-widest">Scroll to explore</span>
-              </div>
             </div>
             
             {[
-              { title: "MYSTIC", img: "https://i.postimg.cc/SsMbfGNf/image.png", color: "from-purple-500/20", desc: "深邃而神秘的视觉语言" },
-              { title: "ETHNIC", img: "https://i.postimg.cc/HsJsPbZN/image.png", color: "from-orange-500/20", desc: "民族元素的现代重构" },
-              { title: "MODERN", img: "https://i.postimg.cc/MZmF2LNk/13e48e35167ad06cc06b9621fe9691d5.jpg", color: "from-blue-500/20", desc: "极简主义的极致表达" },
-              { title: "FUTURE", img: "https://i.postimg.cc/SRx7pg2t/image.png", color: "from-primary/20", desc: "面向未来的品牌张力" }
+              { title: "MYSTIC", img: "https://i.postimg.cc/SsMbfGNf/image.png", color: "from-purple-500/20" },
+              { title: "ETHNIC", img: "https://i.postimg.cc/HsJsPbZN/image.png", color: "from-orange-500/20" },
+              { title: "MODERN", img: "https://i.postimg.cc/MZmF2LNk/13e48e35167ad06cc06b9621fe9691d5.jpg", color: "from-blue-500/20" },
+              { title: "FUTURE", img: "https://i.postimg.cc/SRx7pg2t/image.png", color: "from-primary/20" }
             ].map((item, i) => (
               <TiltCard 
                 key={i}
-                className="flex-shrink-0 w-[500px] aspect-[3/4] relative group rounded-[40px] overflow-hidden bg-white/5 border border-white/10"
+                className="flex-shrink-0 w-[450px] aspect-[3/4] relative group rounded-[12px] overflow-hidden bg-white/5 border border-white/10"
               >
                 <img 
                   src={item.img} 
                   alt={item.title} 
-                  className="w-full h-full object-cover opacity-40 group-hover:opacity-100 group-hover:scale-110 transition-all duration-1000 ease-out"
+                  className="w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
                   referrerPolicy="no-referrer"
                 />
-                
-                {/* 动态遮罩 */}
                 <motion.div 
                   className="absolute inset-0 bg-primary z-10 pointer-events-none"
                   initial={{ clipPath: "circle(0% at 50% 50%)" }}
                   whileHover={{ clipPath: "circle(150% at 50% 50%)" }}
-                  transition={{ duration: 1.2, ease: [0.19, 1, 0.22, 1] }}
-                  style={{ mixBlendMode: "overlay", opacity: 0.3 }}
+                  transition={{ duration: 0.8, ease: [0.19, 1, 0.22, 1] }}
+                  style={{ mixBlendMode: "overlay", opacity: 0.4 }}
                 />
-                
-                <div className={`absolute inset-0 bg-gradient-to-t ${item.color} via-transparent to-transparent opacity-60`} />
-                
-                {/* 内容层 */}
-                <div className="absolute inset-0 p-12 flex flex-col justify-end" style={{ transform: "translateZ(40px)" }}>
-                  <div className="overflow-hidden">
-                    <motion.span 
-                      initial={{ y: 20, opacity: 0 }}
-                      whileInView={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                      className="text-xs font-mono text-primary mb-3 block tracking-[0.4em]"
-                    >
-                      CONCEPT_0{i+1}
-                    </motion.span>
-                  </div>
-                  <div className="overflow-hidden">
-                    <motion.h3 
-                      initial={{ y: 40, opacity: 0 }}
-                      whileInView={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.3 }}
-                      className="text-5xl font-black text-white tracking-tighter mb-4"
-                    >
-                      {item.title}
-                    </motion.h3>
-                  </div>
-                  <p className="text-white/40 text-sm font-light max-w-[200px] group-hover:text-white/80 transition-colors duration-500">
-                    {item.desc}
-                  </p>
+                <div className={`absolute inset-0 bg-primary/20 opacity-60`} />
+                <div className="absolute bottom-8 left-8" style={{ transform: "translateZ(30px)" }}>
+                  <span className="text-xs font-mono text-primary mb-2 block tracking-[0.3em]">CONCEPT_0{i+1}</span>
+                  <h3 className="text-4xl font-black text-white tracking-tighter">{item.title}</h3>
                 </div>
                 
-                {/* 装饰性坐标 */}
-                <div className="absolute top-8 right-8 font-mono text-[10px] text-white/20">
-                  40.7128° N, 74.0060° W
-                </div>
-                
-                {/* 交互圆圈 */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-700 scale-50 group-hover:scale-100 backdrop-blur-md" style={{ transform: "translateZ(60px)" }}>
-                  <ArrowRight size={32} className="text-white" />
+                {/* Glass Overlay on Hover */}
+                <div className="absolute inset-0 bg-white/5 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center" style={{ transform: "translateZ(40px)" }}>
+                  <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-transform duration-500 delay-100">
+                    ➡️
+                  </div>
                 </div>
               </TiltCard>
             ))}
             
-            <div className="flex-shrink-0 w-[500px] flex flex-col justify-center items-center text-center px-12">
-              <div className="w-24 h-24 rounded-full border border-white/10 flex items-center justify-center mb-12 group cursor-pointer hover:border-primary transition-colors duration-500">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                >
-                  <ArrowRight size={40} className="text-white/20 group-hover:text-primary transition-colors" />
-                </motion.div>
-              </div>
-              <h3 className="text-4xl font-black text-white mb-6 tracking-tighter">探索更多灵感</h3>
-              <p className="text-white/40 text-lg font-light leading-relaxed">
-                点击进入完整的品牌视觉系统，<br/>感受每一个像素背后的故事。
-              </p>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="mt-12 px-10 py-4 bg-white text-bg-dark font-black text-sm uppercase tracking-widest rounded-full hover:bg-primary hover:text-white transition-all duration-500"
-              >
-                View Full Gallery
-              </motion.button>
+            <div className="flex-shrink-0 w-[400px] flex flex-col justify-center">
+              <div className="h-px w-full bg-white/10 mb-8" />
+              <p className="text-white/40 font-mono text-sm uppercase tracking-widest mb-4">End of Moodboard</p>
+              <h3 className="text-3xl font-bold text-white/80">探索无限可能</h3>
             </div>
           </div>
         </HorizontalScroll>
@@ -1706,7 +1521,7 @@ export default function App() {
                 viewport={{ once: true }}
                 className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-primary mb-8"
               >
-                <Sparkles size={14} />
+                ✨
                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase">Co-Creation Studio</span>
               </motion.div>
               
@@ -1744,132 +1559,21 @@ export default function App() {
             <div className="lg:w-3/5 w-full">
               <div className="relative group">
                 {/* Decorative Frame */}
-                <div className="absolute -inset-4 border border-white/5 rounded-[32px] pointer-events-none transition-all duration-700 group-hover:border-primary/20" />
+                <div className="absolute -inset-4 border border-white/5 rounded-[12px] pointer-events-none transition-all duration-700 group-hover:border-primary/20" />
                 
-                <div className="glass-card !p-0 overflow-hidden !rounded-[24px] border-white/10">
+                <div className="glass-card !p-0 overflow-hidden !rounded-[12px] border-white/10">
                   <div className="grid grid-cols-1 md:grid-cols-2">
                     {/* Input Side */}
                     <div className="p-8 border-b md:border-b-0 md:border-r border-white/10 bg-white/[0.02]">
-                      <form onSubmit={handleGenerateImage} className="h-full flex flex-col">
-                        <div className="flex-1 mb-8">
-                          <div className="flex items-center justify-between mb-4">
-                            <span className="text-[10px] font-mono text-white/30 uppercase tracking-widest">Prompt Input</span>
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                          </div>
-                          <textarea
-                            value={aiPrompt}
-                            onChange={(e) => setAiPrompt(e.target.value)}
-                            placeholder="描述您的灵感..."
-                            className="w-full bg-transparent text-white placeholder:text-white/20 focus:outline-none resize-none min-h-[200px] text-sm leading-relaxed"
-                          />
-                        </div>
-                        
-                        <MagneticButton
-                          type="submit"
-                          disabled={isGenerating || !aiPrompt.trim()}
-                          className="w-full py-4 bg-primary text-white font-bold rounded-xl shadow-lg relative overflow-hidden group/btn"
-                        >
-                          <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover/btn:animate-[shimmer_1.5s_infinite]" />
-                          <div className="flex items-center justify-center gap-2 relative z-10">
-                            {isGenerating ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
-                            <span className="text-xs tracking-widest uppercase">{isGenerating ? "Magic in progress" : "Generate Vision"}</span>
-                          </div>
-                        </MagneticButton>
-                      </form>
+                <AICreator />
                     </div>
 
                     {/* Preview Side */}
-                    <div className="aspect-square md:aspect-auto bg-black/40 flex items-center justify-center relative overflow-hidden group/preview">
-                      {/* 背景网格 */}
-                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none" />
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
-                      
-                      {/* HUD 装饰元素 */}
-                      <div className="absolute top-4 left-4 flex flex-col gap-1 z-20">
-                        <div className="w-8 h-px bg-primary/40" />
-                        <div className="w-4 h-px bg-primary/40" />
-                        <span className="text-[8px] font-mono text-primary/60 tracking-widest uppercase mt-1">Vision_Scan_v3.1</span>
+                    <div className="aspect-square md:aspect-auto bg-black/40 flex items-center justify-center relative overflow-hidden">
+                      <div className="flex flex-col items-center gap-4 text-white/10">
+                        <span className="text-5xl">🖼️</span>
+                        <span className="text-[10px] font-mono uppercase tracking-widest">Waiting for input</span>
                       </div>
-                      <div className="absolute bottom-4 right-4 text-right z-20">
-                        <span className="text-[8px] font-mono text-primary/60 tracking-widest uppercase block">LAT: 40.7128° N</span>
-                        <span className="text-[8px] font-mono text-primary/60 tracking-widest uppercase block">LNG: 74.0060° W</span>
-                        <div className="w-12 h-px bg-primary/40 mt-2 ml-auto" />
-                      </div>
-
-                      {isGenerating ? (
-                        <div className="flex flex-col items-center relative z-20">
-                          {/* 扫描线效果 */}
-                          <motion.div 
-                            animate={{ top: ["0%", "100%", "0%"] }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                            className="absolute left-0 right-0 h-px bg-primary shadow-[0_0_15px_rgba(52,58,150,1)] z-30"
-                          />
-                          
-                          <div className="relative w-24 h-24 mb-8">
-                            <motion.div 
-                              animate={{ rotate: 360 }}
-                              transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-                              className="absolute inset-0 rounded-full border-2 border-primary/20 border-t-primary shadow-[0_0_20px_rgba(52,58,150,0.2)]"
-                            />
-                            <motion.div 
-                              animate={{ rotate: -360 }}
-                              transition={{ repeat: Infinity, duration: 6, ease: "linear" }}
-                              className="absolute inset-2 rounded-full border border-white/10 border-b-white/30"
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <Sparkles className="text-primary animate-pulse" size={32} />
-                            </div>
-                          </div>
-                          
-                          <div className="flex flex-col items-center gap-2">
-                            <span className="text-[10px] font-mono text-primary tracking-[0.4em] uppercase animate-pulse">Neural_Processing</span>
-                            <div className="flex gap-1">
-                              {[0, 1, 2].map(i => (
-                                <motion.div 
-                                  key={i}
-                                  animate={{ opacity: [0, 1, 0] }}
-                                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                                  className="w-1 h-1 bg-primary rounded-full"
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ) : generatedImage ? (
-                        <div className="relative w-full h-full group/img">
-                          <motion.img 
-                            initial={{ opacity: 0, scale: 1.1, filter: "blur(20px)" }}
-                            animate={{ 
-                              opacity: 1, 
-                              scale: 1, 
-                              filter: "blur(0px)"
-                            }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            src={generatedImage} 
-                            alt="AI Vision" 
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-105"
-                            referrerPolicy="no-referrer"
-                          />
-                          {/* 图片上的扫描线（静止或微动） */}
-                          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent opacity-30 pointer-events-none" />
-                          <div className="absolute inset-0 border-4 border-white/5 m-4 pointer-events-none" />
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-6 text-white/10 relative z-20">
-                          <div className="relative">
-                            <ImageIcon size={64} strokeWidth={0.5} />
-                            <motion.div 
-                              animate={{ opacity: [0.1, 0.3, 0.1] }}
-                              transition={{ duration: 4, repeat: Infinity }}
-                              className="absolute -inset-8 bg-primary/20 blur-3xl rounded-full"
-                            />
-                          </div>
-                          <div className="flex flex-col items-center gap-2">
-                            <span className="text-[10px] font-mono uppercase tracking-[0.5em]">System_Idle</span>
-                            <span className="text-[8px] font-mono uppercase tracking-widest text-white/5">Waiting for neural prompt...</span>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1906,7 +1610,7 @@ export default function App() {
                   onClick={handleLogin}
                   className="px-6 py-3 bg-white/5 border border-white/10 rounded-full text-xs font-bold tracking-widest uppercase hover:bg-primary hover:border-primary transition-all flex items-center gap-2"
                 >
-                  <LogIn size={14} />
+                  🚪
                   <span>Sign in to comment</span>
                 </MagneticButton>
               )}
@@ -1920,8 +1624,8 @@ export default function App() {
                 <div className="glass-card !p-6 border-white/10 bg-white/[0.02]">
                   {user ? (
                     <form onSubmit={handleSubmitComment} className="space-y-6">
-                      <div className="flex items-center gap-3 mb-6">
-                        <img src={user.photoURL || ""} alt="Avatar" className="w-8 h-8 rounded-full border border-primary/30" referrerPolicy="no-referrer" />
+                      <div className="flex items-center gap-4 mb-6">
+                        <img src={user.photoURL || ""} alt="Avatar" className="w-8 h-8 rounded-full border border-primary/30" referrerPolicy="no-referrer" loading="lazy" />
                         <div>
                           <p className="text-xs font-bold text-white/80">{user.displayName}</p>
                           <p className="text-[10px] text-white/30 font-mono uppercase">Active User</p>
@@ -1932,13 +1636,13 @@ export default function App() {
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         placeholder="撰写您的想法..."
-                        className="w-full bg-black/20 border border-white/5 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-primary/30 min-h-[120px] transition-all"
+                        className="w-full bg-black/20 border border-white/5 rounded-[12px] p-4 text-sm text-white focus:outline-none focus:border-primary/30 min-h-[120px] transition-all"
                       />
                       
                       <MagneticButton
                         type="submit"
                         disabled={isSubmitting || !newComment.trim()}
-                        className="w-full py-3 bg-primary text-white text-xs font-bold rounded-xl tracking-widest uppercase shadow-lg shadow-primary/20 disabled:opacity-30"
+                        className="w-full py-3 bg-primary text-white text-xs font-bold rounded-[12px] tracking-widest uppercase shadow-lg shadow-primary/20 disabled:opacity-30"
                       >
                         {isSubmitting ? "Posting..." : "Post Comment"}
                       </MagneticButton>
@@ -1946,10 +1650,10 @@ export default function App() {
                   ) : (
                     <div className="text-center py-12">
                       <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 text-white/20">
-                        <MessageSquare size={20} />
+                        💬
                       </div>
                       <p className="text-sm text-white/30 mb-6">请登录后参与互动</p>
-                      <MagneticButton onClick={handleLogin} className="w-full py-3 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-white/5">
+                      <MagneticButton onClick={handleLogin} className="w-full py-3 border border-white/10 rounded-[12px] text-[10px] font-bold uppercase tracking-widest hover:bg-white/5">
                         Login Now
                       </MagneticButton>
                     </div>
@@ -1963,84 +1667,48 @@ export default function App() {
               <div className="space-y-6">
                 <AnimatePresence mode="popLayout">
                   {comments.length > 0 ? (
-                    <motion.div
-                      initial="hidden"
-                      animate="visible"
-                      variants={{
-                        visible: {
-                          transition: {
-                            staggerChildren: 0.1
-                          }
-                        }
-                      }}
-                      className="space-y-6"
-                    >
-                      {comments.map((comment, i) => (
-                        <motion.div
-                          key={comment.id}
-                          variants={{
-                            hidden: { opacity: 0, x: 20, filter: "blur(10px)" },
-                            visible: { opacity: 1, x: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 200, damping: 20 } }
-                          }}
-                          exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
-                          className="group relative"
-                        >
-                          <div className="flex gap-6 p-8 rounded-[32px] bg-white/[0.02] border border-white/5 hover:border-primary/20 hover:bg-white/[0.04] transition-all duration-700 relative overflow-hidden">
-                            {/* Hover Glow */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
-                            
-                            <div className="relative z-10 flex gap-6 w-full">
-                              {comment.authorPhoto ? (
-                                <div className="relative flex-shrink-0">
-                                  <img src={comment.authorPhoto} alt={comment.authorName} className="w-12 h-12 rounded-full grayscale group-hover:grayscale-0 transition-all duration-700 border border-white/10 group-hover:border-primary/30" referrerPolicy="no-referrer" />
-                                  <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-bg-dark border border-white/10 flex items-center justify-center">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-white/20 border border-white/10 group-hover:border-primary/30 transition-all duration-700 flex-shrink-0"><User size={24} /></div>
-                              )}
-                              
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between mb-3">
-                                  <div className="flex items-center gap-3">
-                                    <h4 className="text-sm font-black text-white/90 tracking-tight">{comment.authorName}</h4>
-                                    <div className="w-1 h-1 rounded-full bg-white/10" />
-                                    <span className="text-[10px] font-mono text-white/20 uppercase tracking-widest">Verified_Voice</span>
-                                  </div>
-                                  <span className="text-[10px] font-mono text-white/20 bg-white/5 px-2 py-1 rounded-md">
-                                    {comment.createdAt?.toDate().toLocaleDateString()}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-white/50 leading-relaxed group-hover:text-white/80 transition-colors duration-500 font-light">
-                                  {comment.text}
-                                </p>
-                              </div>
-                              
-                              {user?.uid === comment.authorUid && (
-                                <button 
-                                  onClick={() => handleDeleteComment(comment.id)}
-                                  className="opacity-0 group-hover:opacity-100 p-2 text-white/20 hover:text-red-500 transition-all self-start"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
+                    comments.map((comment, i) => (
+                      <motion.div
+                        key={comment.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: i * 0.1 }}
+                        className="group relative"
+                      >
+                        <div className="flex gap-6 p-6 rounded-[12px] bg-white/[0.02] border border-white/5 hover:border-white/10 hover:bg-white/[0.04] transition-all duration-500">
+                          {comment.authorPhoto ? (
+                            <img src={comment.authorPhoto} alt={comment.authorName} className="w-10 h-10 rounded-full grayscale group-hover:grayscale-0 transition-all duration-500" referrerPolicy="no-referrer" loading="lazy" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/20">👤</div>
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-bold text-white/80">{comment.authorName}</h4>
+                              <span className="text-[10px] font-mono text-white/20">
+                                {comment.createdAt?.toDate().toLocaleDateString()}
+                              </span>
                             </div>
+                            <p className="text-sm text-white/50 leading-relaxed group-hover:text-white/70 transition-colors">
+                              {comment.text}
+                            </p>
                           </div>
-                        </motion.div>
-                      ))}
-                    </motion.div>
+                          
+                          {user?.uid === comment.authorUid && (
+                            <button 
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className="opacity-0 group-hover:opacity-100 p-2 text-white/20 hover:text-red-500 transition-all"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))
                   ) : (
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="py-32 text-center border border-dashed border-white/10 rounded-[40px] bg-white/[0.01] relative overflow-hidden group"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                      <MessageSquare size={48} className="mx-auto mb-6 text-white/5 group-hover:text-primary/20 transition-colors duration-700" strokeWidth={1} />
-                      <p className="text-white/20 font-mono text-xs uppercase tracking-[0.5em] mb-2">Silence_Detected</p>
-                      <p className="text-white/10 text-[10px] uppercase tracking-widest">Be the first to resonate with Xylon</p>
-                    </motion.div>
+                    <div className="py-20 text-center border border-dashed border-white/5 rounded-[12px]">
+                      <p className="text-white/20 font-mono text-xs uppercase tracking-widest">No voices yet. Be the first.</p>
+                    </div>
                   )}
                 </AnimatePresence>
               </div>
@@ -2059,7 +1727,7 @@ export default function App() {
             alt="Thanks Background" 
             className="w-full h-full opacity-60"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-bg-dark via-transparent to-bg-dark" />
+          <div className="absolute inset-0 bg-primary/5" />
         </div>
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
