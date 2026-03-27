@@ -949,9 +949,6 @@ export default function App() {
               <a href="#brand-details" onClick={(e) => { e.preventDefault(); document.getElementById('brand-details')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">品牌解析</a>
             </Magnetic>
             <Magnetic strength={0.3}>
-              <a href="#brand-mood" onClick={(e) => { e.preventDefault(); document.getElementById('brand-mood')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">Brand Mood</a>
-            </Magnetic>
-            <Magnetic strength={0.3}>
               <a href="#showcase" onClick={(e) => { e.preventDefault(); document.getElementById('showcase')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">展示</a>
             </Magnetic>
             <Magnetic strength={0.3}>
@@ -991,7 +988,7 @@ export default function App() {
         </div>
       </header>
 
-      <Marquee text="BRAND MOOD • DESIGN PHILOSOPHY • CREATIVE DIRECTION • XYLON" speed={30} />
+      <Marquee text="BRAND MOOD • DESIGN PHILOSOPHY • CREATIVE DIRECTION • XYLON" speed={60} />
 
       <BackgroundParticles mouseX={mouseX} mouseY={mouseY} />
 
@@ -1358,26 +1355,6 @@ export default function App() {
         </div>
       </Section>
     </PerspectiveSection>
-
-      <SectionDivider />
-
-      <Section id="brand-mood" className="min-h-screen pt-24">
-        <div className="max-w-6xl w-full mx-auto px-4">
-          <Reveal className="text-4xl md:text-5xl font-black uppercase mb-12">
-            <ScrambleText text="BRAND MOOD" />
-          </Reveal>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-white/5 p-8 rounded-2xl border border-white/10">
-              <h3 className="text-2xl font-bold mb-4">Vibe 1</h3>
-              <p className="text-white/60">Description of vibe 1.</p>
-            </div>
-            <div className="bg-white/5 p-8 rounded-2xl border border-white/10">
-              <h3 className="text-2xl font-bold mb-4">Vibe 2</h3>
-              <p className="text-white/60">Description of vibe 2.</p>
-            </div>
-          </div>
-        </div>
-      </Section>
 
       <SectionDivider />
 
