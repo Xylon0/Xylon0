@@ -83,16 +83,19 @@ const ParallaxImage = ({ src, alt, className = "" }: { src: string; alt: string;
     target: ref,
     offset: ["start end", "end start"]
   });
-  const y = useTransform(scrollYProgress, [0, 1], ["-15%", "15%"]);
-  const blur = useTransform(scrollYProgress, [0, 0.5, 1], ["blur(12px)", "blur(0px)", "blur(12px)"]);
-  const opacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.3, 1, 0.3]);
+  
+  // 增强视差效果：更大幅度的位移和缩放
+  const y = useTransform(scrollYProgress, [0, 1], ["-20%", "20%"]);
+  const scale = useTransform(scrollYProgress, [0, 0.5, 1], [1.1, 1.4, 1.1]);
+  const blur = useTransform(scrollYProgress, [0, 0.5, 1], ["blur(15px)", "blur(0px)", "blur(15px)"]);
+  const opacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.2, 0.6, 0.2]);
 
   return (
     <div ref={ref} className={`relative overflow-hidden ${className}`}>
       <motion.img
         src={src}
         alt={alt}
-        style={{ y, scale: 1.3, filter: blur, opacity }}
+        style={{ y, scale, filter: blur, opacity }}
         className="absolute inset-0 w-full h-full object-cover"
         referrerPolicy="no-referrer"
       />
@@ -439,24 +442,37 @@ const LogoShowcaseContent = () => {
       className="relative w-full flex flex-col items-center justify-center z-10 py-32 cursor-none"
       style={{ perspective: 1500 }}
     >
-      {/* 动态光影层 */}
-      <motion.div 
-        style={{ 
-          rotateX, 
-          rotateY, 
-          scale,
-          opacity: useTransform(scale, [1, 1.1], [0, 0.3])
+      {/* 浮动容器 */}
+      <motion.div
+        animate={{ 
+          y: [0, -15, 0],
         }}
-        className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full pointer-events-none"
-      />
-      
-      <motion.img 
-        style={{ rotateX, rotateY, scale }}
-        src="https://i.postimg.cc/XJfLcZd3/shi-liang-zhi-neng-dui-xiang.png" 
-        alt="Xylon Logo" 
-        className="w-56 md:w-80 h-auto object-contain drop-shadow-[0_40px_80px_rgba(0,0,0,0.7)] relative z-10"
-        referrerPolicy="no-referrer"
-      />
+        transition={{ 
+          duration: 6,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+        className="w-full flex flex-col items-center"
+      >
+        {/* 动态光影层 */}
+        <motion.div 
+          style={{ 
+            rotateX, 
+            rotateY, 
+            scale,
+            opacity: useTransform(scale, [1, 1.1], [0, 0.3])
+          }}
+          className="absolute inset-0 bg-primary/20 blur-[100px] rounded-full pointer-events-none"
+        />
+        
+        <motion.img 
+          style={{ rotateX, rotateY, scale }}
+          src="https://i.postimg.cc/XJfLcZd3/shi-liang-zhi-neng-dui-xiang.png" 
+          alt="Xylon Logo" 
+          className="w-56 md:w-80 h-auto object-contain drop-shadow-[0_40px_80px_rgba(0,0,0,0.7)] relative z-10"
+          referrerPolicy="no-referrer"
+        />
+      </motion.div>
 
       {/* 交互提示 */}
       <motion.div 
@@ -979,7 +995,22 @@ export default function App() {
       {/* Header / Navigation */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-bg-dark/80 backdrop-blur-md border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="font-black text-xl tracking-widest text-white">XYLON LOGO</div>
+          <div className="relative group px-4 py-2 cursor-pointer">
+            {/* Static Border (visible when not hovering) */}
+            <div className="absolute inset-0 rounded-lg border border-white/10 group-hover:border-transparent transition-colors duration-500" />
+            
+            {/* Animated Light Beam (visible on hover) */}
+            <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500 overflow-hidden pointer-events-none">
+              <div className="absolute inset-[-150%] bg-[conic-gradient(from_0deg,transparent_80%,#343a96_100%)] animate-[spin_4s_linear_infinite]" />
+              {/* Inner Mask to create the border effect */}
+              <div className="absolute inset-[1px] bg-bg-dark rounded-[7px] z-[1]" />
+            </div>
+
+            {/* Text Content */}
+            <div className="relative z-10 font-black text-xl tracking-widest text-white">
+              XYLON LOGO
+            </div>
+          </div>
           <nav className="hidden md:flex gap-8 text-sm font-bold tracking-widest text-white/70">
             <Magnetic strength={0.3}>
               <a href="#hero" onClick={(e) => { e.preventDefault(); document.getElementById('hero')?.scrollIntoView({ behavior: 'smooth' }); }} className="hover:text-primary transition-colors">首页</a>
@@ -1399,7 +1430,7 @@ export default function App() {
       <SectionDivider />
 
       {/* 6. LOGO 展示 */}
-      <Section id="showcase">
+      <Section id="showcase" className="relative overflow-hidden">
         <div className="max-w-6xl w-full mx-auto z-10 px-4 flex flex-col items-center">
           <div className="mb-16 text-center w-full">
             <Reveal className="text-4xl md:text-5xl font-black uppercase mb-4">
@@ -1415,13 +1446,41 @@ export default function App() {
           
           <LogoShowcaseContent />
         </div>
+        
+        {/* 多层视差背景 */}
         <div className="absolute inset-0 z-0 pointer-events-none">
+          {/* 底层：主背景图 */}
           <ParallaxImage 
             src="https://i.postimg.cc/6qt9LxVR/bei-jing2.png" 
-            alt="Logo Showcase Background" 
-            className="w-full h-full opacity-40"
+            alt="Logo Showcase Background Layer 1" 
+            className="w-full h-full opacity-20 scale-150"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-bg-dark via-transparent to-bg-dark" />
+          
+          {/* 中层：光影效果 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-bg-dark via-transparent to-bg-dark opacity-80" />
+          
+          {/* 顶层：细节纹理，使用 ParallaxImage 实现反向视差 */}
+          <div className="absolute inset-0 opacity-10 mix-blend-overlay overflow-hidden">
+            <ParallaxImage 
+              src="https://www.transparenttextures.com/patterns/carbon-fibre.png" 
+              alt="Texture Layer" 
+              className="w-full h-full scale-110"
+            />
+          </div>
+          
+          {/* 装饰性光晕 */}
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.5, 0.3],
+            }}
+            transition={{ 
+              duration: 8,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/10 blur-[150px] rounded-full"
+          />
         </div>
       </Section>
 
